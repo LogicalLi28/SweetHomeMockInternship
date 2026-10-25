@@ -2007,7 +2007,7 @@ public class PlanComponent extends JComponent implements PlanView, Scrollable, P
    * Prints this component plan at the scale given in the home print attributes or at a scale 
    * that makes it fill <code>pageFormat</code> imageable size if this attribute is <code>null</code>.
    */
-  public int print(Graphics g, PageFormat pageFormat, int pageIndex) {
+  private int printSelectedLevel(Graphics g, PageFormat pageFormat, int pageIndex) {
     List<Selectable> printedItems = getPaintedItems(); 
     Rectangle2D printedItemBounds = getItemsBounds(g, printedItems);
     if (printedItemBounds != null) {
@@ -2074,7 +2074,61 @@ public class PlanComponent extends JComponent implements PlanView, Scrollable, P
       return NO_SUCH_PAGE;
     }
   }
-  
+
+  /**
+   * Prints the plan of each viewable level in home level order, restoring
+   * the originally selected level after printing.
+   *
+   * @param g the graphics context used to print the page
+   * @param pageFormat the format of the page to print
+   * @param pageIndex the zero-based index of the page to print
+   * @return {@code PAGE_EXISTS} if the requested page exists,
+   *         or {@code NO_SUCH_PAGE} otherwise
+   */
+  public int print(Graphics g, PageFormat pageFormat, int pageIndex) {
+    Level originalSelectedLevel = this.home.getSelectedLevel();
+    BufferedImage dummyImage =
+            new BufferedImage(1, 1, BufferedImage.TYPE_INT_RGB);
+
+    try {
+      for (Level level : this.home.getLevels()) {
+        if (!level.isViewable()) {
+          continue;
+        }
+
+        this.home.setSelectedLevel(level);
+
+        int levelPageCount = 0;
+        while (true) {
+          Graphics dummyGraphics = dummyImage.getGraphics();
+          int result;
+          try {
+            result = printSelectedLevel(
+                    dummyGraphics, pageFormat, levelPageCount);
+          } finally {
+            dummyGraphics.dispose();
+          }
+
+          if (result == NO_SUCH_PAGE) {
+            break;
+          }
+
+          levelPageCount++;
+        }
+
+        if (pageIndex < levelPageCount) {
+          return printSelectedLevel(g, pageFormat, pageIndex);
+        }
+
+        pageIndex -= levelPageCount;
+      }
+
+      return NO_SUCH_PAGE;
+    } finally {
+      this.home.setSelectedLevel(originalSelectedLevel);
+    }
+  }
+
   /**
    * Returns an image of the selected items displayed by this component 
    * (camera excepted) with no outline at scale 1/1 (1 pixel = 1cm).
